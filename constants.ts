@@ -2,18 +2,6 @@
 import type { Audit, Incident, ChartDataPoint, SOP, AuditTemplate, Collection, User } from './types';
 import { DefaultDepartments, AuditStatus, InspectionResult, IncidentStatus, IncidentPriority, IncidentType } from './types';
 
-// STAFF_MEMBERS will now be dynamically derived from the `users` state in App.tsx
-// export const STAFF_MEMBERS = [
-//   'Jane Doe',
-//   'Alice Johnson',
-//   'Bob Smith',
-//   'Charlie Brown',
-//   'Diana Prince',
-//   'Maria Garcia',
-//   'John Doe',
-//   'Sarah Lee'
-// ];
-
 export const MOCK_USERS: User[] = [
   {
     id: 'u1',
@@ -35,7 +23,7 @@ export const MOCK_USERS: User[] = [
     department: 'Kitchen',
     status: 'active'
   },
-    {
+  {
     id: 'u3',
     name: 'Alice Johnson',
     email: 'alice@hotel.com',
@@ -45,7 +33,7 @@ export const MOCK_USERS: User[] = [
     department: 'Housekeeping',
     status: 'active'
   },
-    {
+  {
     id: 'u4',
     name: 'Charlie Brown',
     email: 'charlie@hotel.com',
@@ -56,6 +44,9 @@ export const MOCK_USERS: User[] = [
     status: 'on-hold' // Example of on-hold user
   }
 ];
+
+// Derived list for backwards compatibility with components using STAFF_MEMBERS
+export const STAFF_MEMBERS = MOCK_USERS.map(u => u.name);
 
 export const mockAudits: Audit[] = [
   {
@@ -210,3 +201,77 @@ export const mockIncidents: Incident[] = [
     assignee: 'Cleaning Crew',
     status: IncidentStatus.Resolved,
     priority: IncidentPriority.Low,
+    type: IncidentType.DailyLog,
+    reportedAt: '2024-08-13T14:00:00Z',
+    history: [
+      {
+        id: 'h4',
+        timestamp: '2024-08-13T14:00:00Z',
+        action: 'Reported',
+        user: 'System',
+        details: 'Automated log.'
+      },
+      {
+        id: 'h5',
+        timestamp: '2024-08-13T16:00:00Z',
+        action: 'Resolved',
+        user: 'Cleaning Crew',
+        details: 'Stain removed.'
+      }
+    ]
+  },
+];
+
+export const mockSops: SOP[] = [
+    {
+      id: 'sop-1',
+      title: 'Kitchen Opening & Closing Procedures',
+      category: 'Kitchen',
+      content: 'Detailed checklist for daily kitchen setup and breakdown, including equipment checks, sanitation stations, and food storage protocols.'
+    },
+    {
+      id: 'sop-2',
+      title: 'Guest Room Deep Cleaning Standard',
+      category: 'Housekeeping',
+      content: 'Step-by-step guide for deep cleaning guest rooms, covering high-touch surfaces, UVC light usage, and linen handling.'
+    },
+    {
+      id: 'sop-3',
+      title: 'Biohazard Spill Response Protocol',
+      category: 'All Departments',
+      content: 'Emergency procedures for safely containing and cleaning biohazardous materials, including required PPE and disposal methods.'
+    },
+    {
+        id: 'sop-4',
+        title: 'Front Desk Hygiene & Safety',
+        category: 'Front Office',
+        content: 'Guidelines for maintaining a clean and safe reception area, including sanitizing key cards, managing guest queues, and handling luggage.'
+    }
+];
+
+export const mockCollections: Collection[] = [
+  {
+    id: 'col-1',
+    title: 'Kitchen Hygiene Pack',
+    description: 'Complete set of checks and guides for kitchen safety and daily operations.',
+    templateIds: ['temp-1'],
+    sopIds: ['sop-1', 'sop-3']
+  },
+  {
+    id: 'col-2',
+    title: 'Housekeeping Excellence',
+    description: 'Standard operating procedures and inspection templates for room turnover.',
+    templateIds: ['temp-2'],
+    sopIds: ['sop-2', 'sop-3']
+  }
+];
+
+export const mockChartData: ChartDataPoint[] = [
+    { name: 'Mon', score: 92 },
+    { name: 'Tue', score: 95 },
+    { name: 'Wed', score: 88 },
+    { name: 'Thu', score: 97 },
+    { name: 'Fri', score: 91 },
+    { name: 'Sat', score: 94 },
+    { name: 'Sun', score: 98 },
+];

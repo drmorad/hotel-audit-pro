@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import type { Audit, SOP, AuditTemplate, Collection, User, UserRole } from '../types';
 import { AuditStatus, InspectionResult } from '../types';
 import { UserIcon, XIcon, PencilIcon } from './icons/ActionIcons';
-import { ChecklistIcon, BookIcon, CollectionIcon, AdminIcon } from './icons/NavIcons'; // Removed DashboardIcon as it's not used here
+import { ChecklistIcon, BookIcon, CollectionIcon, AdminIcon } from './icons/NavIcons';
 
 interface AdminPanelProps {
   audits: Audit[];
@@ -94,7 +94,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserPassword, setNewUserPassword] = useState(''); // Added for invite/reset
+  const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('staff');
   const [newUserDept, setNewUserDept] = useState('');
 
@@ -172,10 +172,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       
       const template = templates.find(t => t.id === templateId);
       if (template) {
-          // Preserve existing title if typed, else use template title
           if(!newTaskTitle.trim()) setNewTaskTitle(template.title);
           setNewTaskDept(template.department);
-          // Overwrite items with template items
           setNewTaskItems(template.items.map(i => ({ description: i.description, assignee: i.assignee || '' })));
       }
   };
@@ -202,7 +200,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     onAddAudit(audit);
     setIsTaskModalOpen(false);
     
-    // reset form
     setNewTaskTitle('');
     setNewTaskDate('');
     setNewTaskItems([{description: '', assignee: ''}]);
@@ -316,7 +313,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     const matchedDept = departments.find(d => d === sop.category) || departments[0] || '';
     setNewTemplateDept(matchedDept);
 
-    // Split by new line, trim whitespace, and remove bullet points
     const lines = sop.content.split('\n')
         .map(line => line.trim())
         .filter(l => l.length > 0);
@@ -379,20 +375,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleOpenAddUserModal = () => {
       setNewUserName('');
       setNewUserEmail('');
-      setNewUserPassword(''); // Clear password field for new user
+      setNewUserPassword(''); 
       setNewUserRole('staff');
       setNewUserDept(departments[0] || 'Kitchen');
-      setEditingUserId(null); // Ensure we are in add mode
+      setEditingUserId(null); 
       setIsUserModalOpen(true);
   };
 
   const handleOpenEditUserModal = (user: User) => {
       setNewUserName(user.name);
       setNewUserEmail(user.email);
-      setNewUserPassword(''); // Do not pre-fill password for security (even in mock)
+      setNewUserPassword(''); 
       setNewUserRole(user.role);
       setNewUserDept(user.department || departments[0]);
-      setEditingUserId(user.id); // Set ID to allow update logic
+      setEditingUserId(user.id); 
       setIsUserModalOpen(true);
   }
 
@@ -414,7 +410,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...existingUser,
                   name: newUserName,
                   email: newUserEmail,
-                  // Only update password if a new one is provided
                   ...(newUserPassword.trim() ? { password: newUserPassword } : {}), 
                   role: newUserRole,
                   department: newUserDept,
@@ -428,7 +423,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               id: `u-${Date.now()}`,
               name: newUserName,
               email: newUserEmail,
-              password: newUserPassword, // Use provided initial password
+              password: newUserPassword, 
               role: newUserRole,
               department: newUserDept,
               avatar: getInitials(newUserName),
@@ -938,168 +933,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
         )}
 
-        {/* TEMPLATES TAB */}
-        {activeTab === 'templates' && (
-            <div>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-200 dark:border-gray-700 pb-2 mb-4 gap-3">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-800 dark:text-white">Audit Templates</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Create reusable audit checklists.</p>
-                    </div>
-                    <button 
-                        onClick={handleOpenTemplateModal}
-                        className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
-                    >
-                        <span className="mr-2 text-lg">+</span> New Template
-                    </button>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {templates.map(template => (
-                        <div key={template.id} className="border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-shadow bg-gray-50 dark:bg-gray-800 relative">
-                            <div className="flex justify-between items-start mb-2 pr-6">
-                                <div>
-                                    <h4 className="font-bold text-gray-800 dark:text-white text-lg">{template.title}</h4>
-                                    <span className="inline-block mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 px-2 py-1 rounded border border-gray-200 dark:border-gray-600">
-                                        {template.department}
-                                    </span>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => onDeleteTemplate(template.id)}
-                                className="absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1"
-                                title="Delete Template"
-                            >
-                                <XIcon />
-                            </button>
-
-                            <div className="mb-4">
-                                <p className="text-sm text-gray-600 dark:text-gray-400">{template.items.length} checklist items defined.</p>
-                            </div>
-                            <div className="flex justify-end">
-                                <button 
-                                    onClick={() => handleScheduleFromTemplate(template)}
-                                    className="bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50 hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 font-semibold px-4 py-2 rounded-lg text-sm transition-all w-full"
-                                >
-                                    Schedule Audit
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                    {templates.length === 0 && (
-                        <div className="col-span-full text-center py-10 text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
-                            <p>No templates found. Create one to streamline your audits.</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* SOP MANAGEMENT TAB */}
-        {activeTab === 'sops' && (
-            <div>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-200 dark:border-gray-700 pb-2 mb-4 gap-3">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-800 dark:text-white">Training & SOPs</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Create reusable audit checklists.</p>
-                    </div>
-                    <button 
-                        onClick={handleOpenSopModal}
-                        className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
-                    >
-                        <span className="mr-2 text-lg">+</span> New Module
-                    </button>
-                </div>
-                <ul className="space-y-3">
-                    {sops.map(sop => (
-                        <li key={sop.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 group">
-                            <div className="mb-2 sm:mb-0 w-full sm:w-auto">
-                                <h4 className="font-bold text-gray-800 dark:text-white">{sop.title}</h4>
-                                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                    <span className="text-xs font-semibold uppercase text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-900/40 px-2 py-0.5 rounded">{sop.category}</span>
-                                    {sop.document && <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center"><svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg> Attachment included</span>}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                                <button 
-                                    onClick={() => handleConvertSopToTemplate(sop)}
-                                    className="flex-1 sm:flex-none justify-center text-cyan-700 dark:text-cyan-300 hover:text-cyan-900 dark:hover:text-cyan-100 text-sm font-medium flex items-center transition-colors border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 px-3 py-1.5 rounded-lg shadow-sm"
-                                    title="Create an Audit Template from this SOP"
-                                >
-                                     <ChecklistIcon className="w-4 h-4" />
-                                     <span className="ml-1">To Template</span>
-                                </button>
-                                <button 
-                                    onClick={() => onDeleteSop(sop.id)}
-                                    className="flex-1 sm:flex-none justify-center text-gray-500 dark:text-gray-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded shadow-sm"
-                                >
-                                    <XIcon /> <span className="ml-1">Delete</span>
-                                </button>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        )}
-
-        {/* COLLECTIONS TAB */}
-        {activeTab === 'collections' && (
-            <div>
-                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-200 dark:border-gray-700 pb-2 mb-4 gap-3">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-800 dark:text-white">Collections</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Bundle templates and training for specific needs.</p>
-                    </div>
-                    <button 
-                        onClick={handleOpenCollectionModal}
-                        className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
-                    >
-                        <span className="mr-2 text-lg">+</span> New Collection
-                    </button>
-                </div>
-                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {collections.map(col => (
-                        <div key={col.id} className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 relative">
-                             <button 
-                                onClick={() => onDeleteCollection(col.id)}
-                                className="absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1"
-                                title="Delete Collection"
-                            >
-                                <XIcon />
-                            </button>
-                            <h4 className="font-bold text-gray-800 dark:text-white text-lg mb-1">{col.title}</h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{col.description}</p>
-                            
-                            <div className="flex gap-4 text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-750 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                                <div>
-                                    <span className="font-bold block mb-1">Templates:</span>
-                                    {col.templateIds.length > 0 ? (
-                                        <ul className="list-disc list-inside">
-                                            {col.templateIds.map(tid => {
-                                                const t = templates.find(temp => temp.id === tid);
-                                                return t ? <li key={tid}>{t.title}</li> : null;
-                                            })}
-                                        </ul>
-                                    ) : <span className="italic text-gray-400">None</span>}
-                                </div>
-                                <div>
-                                    <span className="font-bold block mb-1">Training Modules:</span>
-                                    {col.sopIds.length > 0 ? (
-                                        <ul className="list-disc list-inside">
-                                            {col.sopIds.map(sid => {
-                                                const s = sops.find(sop => sop.id === sid);
-                                                return s ? <li key={sid}>{s.title}</li> : null;
-                                            })}
-                                        </ul>
-                                    ) : <span className="italic text-gray-400">None</span>}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {collections.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400 py-10 col-span-full">No collections created.</p>}
-                 </div>
-            </div>
-        )}
-
       </div>
 
       {/* Create New Task Modal */}
@@ -1396,22 +1229,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
                         <input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" placeholder="e.g. John Doe"/>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-                        <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" placeholder="e.g. john@hotel.com"/>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {editingUserId ? 'Reset Password (optional)' : 'Initial Password'}
-                        </label>
-                        <input 
-                            type="text" 
-                            value={newUserPassword} 
-                            onChange={(e) => setNewUserPassword(e.target.value)} 
-                            className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" 
-                            placeholder={editingUserId ? "Leave blank to keep existing" : "Set initial password"}
-                        />
-                    </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
                         <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value as UserRole)} className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg">
@@ -1426,8 +1243,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         </select>
                     </div>
                     <div className="flex justify-end pt-4">
-                        <button onClick={saveUser} disabled={!newUserName.trim() || !newUserEmail.trim() || (!editingUserId && !newUserPassword.trim())} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-700 disabled:cursor-not-allowed">
-                            {editingUserId ? 'Update User' : 'Send Invite'}
+                        <button onClick={saveUser} disabled={!newUserName.trim()} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-700 disabled:cursor-not-allowed">
+                            {editingUserId ? 'Update User' : 'Add User'}
                         </button>
                     </div>
                 </div>

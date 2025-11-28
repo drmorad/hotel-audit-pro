@@ -1,12 +1,9 @@
-
 import React, { useState, useMemo } from 'react';
 import type { Audit, InspectionItem, User, NewIncidentData } from '../types';
-import { InspectionResult } from '../types';
+import { InspectionResult, AuditStatus } from '../types';
 import { CameraIcon, CheckIcon, XIcon, BanIcon, UserIcon } from './icons/ActionIcons';
 import { generateAuditPDF } from '../utils/pdfGenerator';
-// @ts-ignore: MOCK_USERS will be replaced by dynamic user fetching in a real scenario
-// Added import for MOCK_USERS to populate assignee dropdown.
-import { MOCK_USERS } from '../constants';
+import { STAFF_MEMBERS } from '../constants';
 
 interface AuditScreenProps {
   audit: Audit;
@@ -64,7 +61,7 @@ const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, curren
   const handleSubmit = () => {
     onSave({
         ...currentAudit,
-        status: 'Completed',
+        status: AuditStatus.Completed,
         completedDate: new Date().toISOString().split('T')[0]
     });
   };
@@ -150,7 +147,7 @@ const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, curren
       <div className="flex justify-between items-center mb-4">
         <button onClick={onBack} className="text-blue-600 dark:text-blue-400 hover:underline flex items-center">
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-            Back to Audits
+            Back to Dashboard
         </button>
         <button 
             onClick={handleExportPDF}
@@ -212,7 +209,6 @@ const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, curren
                      </div>
                      <div className="flex flex-col">
                         <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate max-w-[100px]" title={name}>{name}</span>
-                        {/* Tooltip logic usually handled by title attribute for simple implementation */}
                      </div>
                   </div>
                   <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{stat.completed}/{stat.total}</span>
@@ -258,7 +254,7 @@ const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, curren
                             aria-label="Assign team member"
                         >
                             <option value="">Unassigned</option>
-                            {MOCK_USERS.filter(u => u.status === 'active').map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                            {STAFF_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
                     </div>
                 </div>

@@ -8,8 +8,9 @@ import SopLibrary from './components/SopLibrary';
 import AdminPanel from './components/AdminPanel';
 import Collections from './components/Collections';
 import ReportsView from './components/ReportsView';
-import LoginScreen from './components/LoginScreen'; // New LoginScreen component
+import LoginScreen from './components/LoginScreen';
 import ReportIncidentModal from './components/ReportIncidentModal';
+// Ensure correct relative import
 import { mockAudits, mockIncidents, mockSops, mockTemplates, mockCollections, MOCK_USERS } from './constants';
 import type { Audit, Incident, View, NewIncidentData, SOP, AuditTemplate, Collection, User, IncidentActivity, IncidentStatus } from './types';
 import { DefaultDepartments, AuditStatus } from './types';
