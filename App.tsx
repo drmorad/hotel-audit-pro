@@ -8,46 +8,116 @@ import SopLibrary from './components/SopLibrary';
 import AdminPanel from './components/AdminPanel';
 import Collections from './components/Collections';
 import ReportsView from './components/ReportsView';
+import LoginScreen from './components/LoginScreen'; // New LoginScreen component
 import ReportIncidentModal from './components/ReportIncidentModal';
 import { mockAudits, mockIncidents, mockSops, mockTemplates, mockCollections, MOCK_USERS } from './constants';
 import type { Audit, Incident, View, NewIncidentData, SOP, AuditTemplate, Collection, User, IncidentActivity, IncidentStatus } from './types';
 import { DefaultDepartments, AuditStatus } from './types';
+import { dbAPI } from './utils/db';
 
 import { DashboardIcon, ChecklistIcon, WarningIcon, BookIcon, AdminIcon, CollectionIcon, ReportsIcon } from './components/icons/NavIcons';
 
-// Helper hook for local storage persistence
-function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window !== 'undefined') {
-      const stickyValue = window.localStorage.getItem(key);
-      return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
-    }
-    return defaultValue;
-  });
+// Custom Hook for IndexedDB Persistence with Saving State
+function usePersistentState<T>(key: string, defaultValue: T, storeType: 'store' | 'setting' = 'store'): [T, React.Dispatch<React.SetStateAction<T>>, boolean, boolean] {
+    const [data, setData] = useState<T>(defaultValue);
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    }
-  }, [key, value]);
+    // Load Data on Mount
+    useEffect(() => {
+        const load = async () => {
+            try {
+                let saved;
+                if (storeType === 'store') {
+                    saved = await dbAPI.getAll(key);
+                    // If array comes back empty, treat as null so we use default value (mock data)
+                    if (Array.isArray(saved) && saved.length === 0) saved = null;
+                } else {
+                    saved = await dbAPI.getSetting(key);
+                }
 
-  return [value, setValue];
+                if (saved) {
+                    setData(saved);
+                }
+            } catch (err) {
+                console.error(`Error loading ${key} from DB:`, err);
+            } finally {
+                setIsLoaded(true);
+            }
+        };
+        load();
+    }, [key, storeType]);
+
+    // Save Data on Change (only after initial load)
+    useEffect(() => {
+        if (!isLoaded) return;
+
+        const save = async () => {
+            setIsSaving(true);
+            try {
+                if (storeType === 'store' && Array.isArray(data)) {
+                    await dbAPI.saveAll(key, data);
+                } else {
+                    await dbAPI.saveSetting(key, data);
+                }
+            } catch (err) {
+                console.error(`Error saving ${key} to DB:`, err);
+            } finally {
+                // Short delay to let the user see "Saving..." if it was fast
+                setTimeout(() => setIsSaving(false), 500);
+            }
+        };
+        // Debounce slightly to avoid hammering DB on rapid keystrokes
+        const handler = setTimeout(save, 800);
+        return () => clearTimeout(handler);
+    }, [data, isLoaded, key, storeType]);
+
+    return [data, setData, isLoaded, isSaving];
+}
+
+// Hook to track online status
+function useNetworkStatus() {
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    return isOnline;
 }
 
 export default function App() {
-  // Use sticky state for persistence across reloads
-  const [users, setUsers] = useStickyState<User[]>(MOCK_USERS, 'hap_users');
-  const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[0]); // Default to Admin, no need to persist session strictly
+  // Use persistent state with IndexedDB
+  const [users, setUsers, usersLoaded, usersSaving] = usePersistentState<User[]>('users', MOCK_USERS, 'store');
+  const [audits, setAudits, auditsLoaded, auditsSaving] = usePersistentState<Audit[]>('audits', mockAudits, 'store');
+  const [incidents, setIncidents, incidentsLoaded, incidentsSaving] = usePersistentState<Incident[]>('incidents', mockIncidents, 'store');
+  const [sops, setSops, sopsLoaded, sopsSaving] = usePersistentState<SOP[]>('sops', mockSops, 'store');
+  const [templates, setTemplates, templatesLoaded, templatesSaving] = usePersistentState<AuditTemplate[]>('templates', mockTemplates, 'store');
+  const [collections, setCollections, collectionsLoaded, collectionsSaving] = usePersistentState<Collection[]>('collections', mockCollections, 'store');
+  
+  const [hotels, setHotels, hotelsLoaded, hotelsSaving] = usePersistentState<string[]>('hotels', ['Grand Plaza Hotel', 'Seaside Resort'], 'setting');
+  const [departments, setDepartments, departmentsLoaded, departmentsSaving] = usePersistentState<string[]>('departments', Object.values(DefaultDepartments), 'setting');
+
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null); // Now nullable
+  
   const [currentView, setCurrentView] = useState<View>('dashboard');
-  
-  const [audits, setAudits] = useStickyState<Audit[]>(mockAudits, 'hap_audits');
-  const [incidents, setIncidents] = useStickyState<Incident[]>(mockIncidents, 'hap_incidents');
-  const [sops, setSops] = useStickyState<SOP[]>(mockSops, 'hap_sops');
-  const [templates, setTemplates] = useStickyState<AuditTemplate[]>(mockTemplates, 'hap_templates');
-  const [collections, setCollections] = useStickyState<Collection[]>(mockCollections, 'hap_collections');
-  
   const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null);
   
+  const isOnline = useNetworkStatus();
+  const isAppReady = usersLoaded && auditsLoaded && incidentsLoaded && sopsLoaded && templatesLoaded && collectionsLoaded && hotelsLoaded && departmentsLoaded;
+  const isGlobalSaving = usersSaving || auditsSaving || incidentsSaving || sopsSaving || templatesSaving || collectionsSaving || hotelsSaving || departmentsSaving;
+
   // Dark Mode State
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -82,22 +152,55 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  // Check Local Session on Mount
+  useEffect(() => {
+      // Only attempt to load session if users are loaded from DB
+      if (!usersLoaded) return;
+
+      const storedUserJson = sessionStorage.getItem('currentUser');
+      if (storedUserJson) {
+          try {
+              const sessionUser: User = JSON.parse(storedUserJson);
+              // Verify user still exists in the loaded users list (more robust than just sessionStorage)
+              const validUser = users.find(u => u.id === sessionUser.id && u.email === sessionUser.email && u.status === 'active');
+              if (validUser) {
+                  setCurrentUser(validUser);
+                  setIsAuthenticated(true);
+              } else {
+                  console.warn("Stored session user not found or inactive, logging out.");
+                  handleLogout();
+              }
+          } catch (e) {
+              console.error("Failed to parse stored user session:", e);
+              handleLogout();
+          }
+      }
+  }, [usersLoaded, users]); // Re-run if users data changes
+
+  // Sync session if currentUser object itself changes (e.g., admin edits current user)
+  useEffect(() => {
+      if (isAuthenticated && currentUser) {
+          sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+      } else {
+          sessionStorage.removeItem('currentUser');
+      }
+  }, [currentUser, isAuthenticated]);
+
+
   // Security Guard: Redirect non-admins away from Admin Panel
   useEffect(() => {
-    if (currentView === 'admin' && currentUser.role !== 'admin') {
+    // Only apply if authenticated and current user is set
+    if (isAuthenticated && currentUser && currentView === 'admin' && currentUser.role !== 'admin') {
       alert("Access Denied: The Admin Panel is restricted to administrators.");
       setCurrentView('dashboard');
     }
-  }, [currentView, currentUser]);
+  }, [currentView, currentUser, isAuthenticated]);
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
   // Global Modal State
   const [isIncidentModalOpen, setIsIncidentModalOpen] = useState(false);
-
-  // Admin Management State
-  const [hotels, setHotels] = useStickyState<string[]>(['Grand Plaza Hotel', 'Seaside Resort'], 'hap_hotels');
-  const [departments, setDepartments] = useStickyState<string[]>(Object.values(DefaultDepartments), 'hap_departments');
+  const [incidentModalInitialData, setIncidentModalInitialData] = useState<Partial<NewIncidentData> | null>(null);
 
   // Admin Actions
   const handleAddHotel = (name: string) => setHotels([...hotels, name]);
@@ -109,11 +212,23 @@ export default function App() {
   // User Actions
   const handleAddUser = (user: User) => setUsers([...users, user]);
   const handleUpdateUser = (updatedUser: User) => setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
-  const handleDeleteUser = (id: string) => setUsers(users.filter(u => u.id !== id));
+  const handleDeleteUser = (id: string) => {
+      setUsers(users.filter(u => u.id !== id));
+      // If the deleted user was the current user, log out
+      if (currentUser?.id === id) {
+          handleLogout();
+      }
+  };
   const handleToggleUserStatus = (id: string) => {
       setUsers(users.map(u => {
           if (u.id === id) {
-              return { ...u, status: u.status === 'active' ? 'on-hold' : 'active' };
+              const newStatus = u.status === 'active' ? 'on-hold' : 'active';
+              // If current user is put on-hold, log them out
+              if (currentUser?.id === id && newStatus === 'on-hold') {
+                  alert("Your account has been put on hold. Logging you out.");
+                  handleLogout();
+              }
+              return { ...u, status: newStatus };
           }
           return u;
       }));
@@ -173,7 +288,8 @@ export default function App() {
   };
 
   // Incident Actions
-  const handleReportIncident = () => {
+  const handleReportIncident = (data?: Partial<NewIncidentData>) => {
+    setIncidentModalInitialData(data || null);
     setIsIncidentModalOpen(true);
   };
 
@@ -189,13 +305,14 @@ export default function App() {
               id: `log-${Date.now()}`,
               timestamp: timestamp,
               action: 'Reported',
-              user: currentUser.name,
+              user: currentUser?.name || 'Unknown', // Use optional chaining for currentUser
               details: `Initial report created.`
           }
       ]
     };
     setIncidents([newIncident, ...incidents]);
     setIsIncidentModalOpen(false);
+    setIncidentModalInitialData(null);
   };
 
   const handleUpdateIncidentStatus = (incidentId: string, newStatus: IncidentStatus, comment: string) => {
@@ -207,7 +324,7 @@ export default function App() {
                   id: `log-${Date.now()}`,
                   timestamp: timestamp,
                   action: 'Status Update',
-                  user: currentUser.name,
+                  user: currentUser?.name || 'Unknown', // Use optional chaining
                   details: `Changed status to ${newStatus}. ${comment ? `Note: ${comment}` : ''}`
               };
               return {
@@ -220,25 +337,48 @@ export default function App() {
       }));
   };
 
+  // Auth Actions
+  const handleLogin = async (email: string, pass: string): Promise<boolean> => {
+      // In a real app, password would be hashed and compared server-side.
+      // Here, we simulate by checking the plain text password from our mock/IndexedDB users.
+      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      
+      if (user && user.password === pass && user.status === 'active') {
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+          return true;
+      }
+      return false;
+  };
+
+  const handleLogout = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setCurrentView('dashboard'); // Redirect to dashboard on logout
+  };
+
   // Dashboard Data Calculation
   const dashboardData = useMemo(() => {
     const pendingAudits = audits.filter(a => a.status === AuditStatus.Pending).length;
     const criticalIncidents = incidents.filter(i => i.priority === 'Critical' && i.status !== 'Resolved' as any).length;
-    // Mock hygiene score calculation logic
     const dailyHygieneScore = 94; 
     return { pendingAudits, criticalIncidents, dailyHygieneScore };
   }, [audits, incidents]);
 
-  // View Routing
+  // --- View Routing ---
   const renderView = () => {
+    // Current user must be authenticated and set to render any main content
+    if (!currentUser) return null;
+
     switch (currentView) {
       case 'dashboard':
         return (
           <Dashboard 
             data={dashboardData} 
-            audits={audits} 
+            audits={audits}
+            departments={departments} 
             onSelectAudit={handleSelectAudit} 
-            onReportIncident={handleReportIncident}
+            onReportIncident={() => handleReportIncident()} 
             darkMode={darkMode}
             currentUser={currentUser}
           />
@@ -258,13 +398,15 @@ export default function App() {
             onSave={handleUpdateAudit} 
             onBack={() => setCurrentView('auditList')} 
             currentUser={currentUser}
+            onReportIncident={handleReportIncident}
           />
         ) : (
           <Dashboard 
              data={dashboardData} 
-             audits={audits} 
+             audits={audits}
+             departments={departments}
              onSelectAudit={handleSelectAudit} 
-             onReportIncident={handleReportIncident}
+             onReportIncident={() => handleReportIncident()} 
              darkMode={darkMode}
              currentUser={currentUser}
           />
@@ -272,7 +414,7 @@ export default function App() {
       case 'incidents':
         return <IncidentList 
                 incidents={incidents} 
-                onReportIncident={handleReportIncident} 
+                onReportIncident={() => handleReportIncident()} 
                 departments={departments} 
                 onUpdateStatus={handleUpdateIncidentStatus}
                 currentUser={currentUser}
@@ -284,7 +426,7 @@ export default function App() {
       case 'reports':
         return <ReportsView audits={audits} incidents={incidents} currentUser={currentUser} />;
       case 'admin':
-        return currentUser.role === 'admin' ? (
+        return currentUser.role === 'admin' ? ( // Admin role check also here
           <AdminPanel 
             audits={audits}
             hotels={hotels} 
@@ -312,19 +454,41 @@ export default function App() {
           />
         ) : null;
       default:
-        return <Dashboard data={dashboardData} audits={audits} onSelectAudit={handleSelectAudit} onReportIncident={handleReportIncident} darkMode={darkMode} currentUser={currentUser} />;
+        return <Dashboard data={dashboardData} audits={audits} departments={departments} onSelectAudit={handleSelectAudit} onReportIncident={() => handleReportIncident()} darkMode={darkMode} currentUser={currentUser} />;
     }
   };
 
-  const navItems = [
+  const navItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
     { id: 'auditList', label: 'Audits', icon: ChecklistIcon },
     { id: 'incidents', label: 'Incidents', icon: WarningIcon },
     { id: 'sop', label: 'SOP Library', icon: BookIcon },
     { id: 'collections', label: 'Collections', icon: CollectionIcon },
     { id: 'reports', label: 'Reports Archive', icon: ReportsIcon },
-    ...(currentUser.role === 'admin' ? [{ id: 'admin', label: 'Admin Panel', icon: AdminIcon }] : []),
-  ] as const;
+    // Only show Admin Panel if user is Admin and is authenticated
+    ...(isAuthenticated && currentUser?.role === 'admin' ? [{ id: 'admin', label: 'Admin Panel', icon: AdminIcon }] : []),
+  ], [isAuthenticated, currentUser]); // Re-calculate navItems if auth status or user role changes
+
+
+  // LOADING SCREEN
+  if (!isAppReady) {
+      return (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors">
+              <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl flex flex-col items-center">
+                  <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                  <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Hotel Audit Pro</h2>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">Loading local database...</p>
+              </div>
+          </div>
+      );
+  }
+
+  // --- LOGIN SCREEN ---
+  if (!isAuthenticated || !currentUser) {
+      return (
+          <LoginScreen onLogin={handleLogin} />
+      );
+  }
 
   return (
     <div className={`min-h-screen flex flex-col md:flex-row bg-gray-50 dark:bg-gray-900 transition-colors duration-200 font-sans text-gray-900 dark:text-gray-100`}>
@@ -346,24 +510,23 @@ export default function App() {
                 )}
              </button>
              
-             {/* Mobile User Switcher */}
+             {/* Mobile User Profile & Logout */}
              <div className="relative group">
                 <button className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300 font-bold text-sm border border-cyan-200 dark:border-cyan-700">
                     {currentUser.avatar}
                 </button>
                 <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 hidden group-hover:block border border-gray-100 dark:border-gray-700 z-20">
                     <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Switch User</p>
+                        <p className="text-sm font-bold text-gray-800 dark:text-white">{currentUser.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{currentUser.role}</p>
                     </div>
-                    {users.map(u => (
-                        <button 
-                            key={u.id}
-                            onClick={() => setCurrentUser(u)}
-                            className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 ${currentUser.id === u.id ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}
-                        >
-                            {u.name} ({u.role})
-                        </button>
-                    ))}
+                    <button 
+                        onClick={handleLogout}
+                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-bold"
+                    >
+                        <svg className="w-4 h-4 mr-2 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        Sign Out
+                    </button>
                 </div>
              </div>
           </div>
@@ -415,9 +578,9 @@ export default function App() {
                 </span>
             </button>
 
-            {/* User Profile / Switcher */}
-            <div className="relative">
-                <div className="flex items-center p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-700">
+            {/* User Profile & Logout */}
+            <div className="relative group">
+                <div className="flex items-center p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-700 cursor-pointer">
                     <div className="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300 flex items-center justify-center text-xs font-bold mr-3 border border-cyan-200 dark:border-cyan-700">
                         {currentUser.avatar}
                     </div>
@@ -427,25 +590,41 @@ export default function App() {
                     </div>
                 </div>
                 
-                {/* Desktop User Switcher Dropdown (Simple implementation) */}
+                {/* Logout Button */}
                 <div className="mt-2 space-y-1">
-                    <p className="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Switch Account</p>
-                    {users.filter(u => u.id !== currentUser.id).map(u => (
-                        <button
-                            key={u.id}
-                            onClick={() => setCurrentUser(u)}
-                            className="w-full text-left px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                            Login as {u.name}
-                        </button>
-                    ))}
+                    <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 font-bold rounded-md flex items-center"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        Sign Out
+                    </button>
                 </div>
             </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto mb-16 md:mb-0">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto mb-16 md:mb-0 relative">
+        {/* Status Bar - Responsive Position */}
+        <div className={`fixed z-50 flex flex-col gap-2 transition-all duration-300 transform 
+            ${isGlobalSaving || !isOnline ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}
+            bottom-20 left-4 right-4 md:bottom-auto md:left-auto md:top-4 md:right-4 md:items-end
+        `}>
+            {!isOnline && (
+                <div className="bg-red-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center justify-center md:justify-start text-sm font-bold animate-pulse">
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" /></svg>
+                    Working Offline
+                </div>
+            )}
+            {isGlobalSaving && (
+                <div className="bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center justify-center md:justify-start text-sm font-bold">
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Saving...
+                </div>
+            )}
+        </div>
+
         <div className="max-w-7xl mx-auto">
              {renderView()}
         </div>
@@ -480,6 +659,7 @@ export default function App() {
         onClose={() => setIsIncidentModalOpen(false)} 
         onSave={handleSaveIncident} 
         departments={departments}
+        initialData={incidentModalInitialData}
       />
     </div>
   );

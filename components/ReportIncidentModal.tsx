@@ -9,9 +9,10 @@ interface ReportIncidentModalProps {
   onClose: () => void;
   onSave: (incident: NewIncidentData) => void;
   departments: string[];
+  initialData?: Partial<NewIncidentData> | null;
 }
 
-const ReportIncidentModal: React.FC<ReportIncidentModalProps> = ({ isOpen, onClose, onSave, departments }) => {
+const ReportIncidentModal: React.FC<ReportIncidentModalProps> = ({ isOpen, onClose, onSave, departments, initialData }) => {
   // Fallback to DefaultDepartments if dynamic list is empty for some reason, though parent should handle
   const initialDept = departments.length > 0 ? departments[0] : DefaultDepartments.Maintenance;
 
@@ -31,22 +32,34 @@ const ReportIncidentModal: React.FC<ReportIncidentModalProps> = ({ isOpen, onClo
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Reset form when modal is opened
+    // Reset or Populate form when modal is opened
     if (isOpen) {
-      setFormData(initialFormState);
-      setReportType(IncidentType.Emergency);
+      if (initialData) {
+          setFormData({
+              ...initialFormState,
+              ...initialData,
+              // Ensure priority/type logic is respected if passed, otherwise default
+              type: initialData.type || IncidentType.Emergency,
+              priority: initialData.priority || IncidentPriority.High
+          });
+          setReportType(initialData.type || IncidentType.Emergency);
+      } else {
+          setFormData(initialFormState);
+          setReportType(IncidentType.Emergency);
+      }
       setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialData]);
 
-  // Update priority default when type changes
-  useEffect(() => {
-    setFormData(prev => ({
+  // Update priority default when type changes, but only if user interacts (to avoid overwriting initialData on mount)
+  const handleTypeChange = (newType: IncidentType) => {
+      setReportType(newType);
+      setFormData(prev => ({
         ...prev,
-        type: reportType,
-        priority: reportType === IncidentType.Emergency ? IncidentPriority.High : IncidentPriority.Medium
+        type: newType,
+        priority: newType === IncidentType.Emergency ? IncidentPriority.High : IncidentPriority.Medium
     }));
-  }, [reportType]);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -99,7 +112,7 @@ const ReportIncidentModal: React.FC<ReportIncidentModalProps> = ({ isOpen, onClo
         <div className="flex gap-4 mb-6">
             <button 
                 type="button"
-                onClick={() => setReportType(IncidentType.Emergency)}
+                onClick={() => handleTypeChange(IncidentType.Emergency)}
                 className={`flex-1 p-3 rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
                     isEmergency 
                     ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' 
@@ -111,7 +124,7 @@ const ReportIncidentModal: React.FC<ReportIncidentModalProps> = ({ isOpen, onClo
             </button>
             <button 
                  type="button"
-                 onClick={() => setReportType(IncidentType.DailyLog)}
+                 onClick={() => handleTypeChange(IncidentType.DailyLog)}
                  className={`flex-1 p-3 rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
                     !isEmergency 
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' 

@@ -3,8 +3,7 @@ import React, { useState, useMemo } from 'react';
 import type { Audit, SOP, AuditTemplate, Collection, User, UserRole } from '../types';
 import { AuditStatus, InspectionResult } from '../types';
 import { UserIcon, XIcon, PencilIcon } from './icons/ActionIcons';
-import { ChecklistIcon } from './icons/NavIcons';
-import { STAFF_MEMBERS } from '../constants';
+import { ChecklistIcon, BookIcon, CollectionIcon, AdminIcon } from './icons/NavIcons'; // Removed DashboardIcon as it's not used here
 
 interface AdminPanelProps {
   audits: Audit[];
@@ -32,7 +31,7 @@ interface AdminPanelProps {
   onToggleUserStatus: (id: string) => void;
 }
 
-type Tab = 'progress' | 'hotels' | 'departments' | 'users' | 'tasks' | 'templates' | 'sops' | 'collections';
+type Tab = 'progress' | 'tasks' | 'templates' | 'sops' | 'collections' | 'users' | 'hotels' | 'departments';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
   audits, 
@@ -94,8 +93,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState(''); // Added for invite/reset
   const [newUserRole, setNewUserRole] = useState<UserRole>('staff');
   const [newUserDept, setNewUserDept] = useState('');
+
+  // Filter for active users to populate assignment dropdowns
+  const activeUsers = useMemo(() => users.filter(u => u.status === 'active'), [users]);
 
   // --- Logic for Team Progress ---
   const teamStats = useMemo(() => {
@@ -223,17 +227,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const addTemplateItemRow = () => {
-      setNewTemplateItems([...newTemplateItems, {description: '', assignee: ''}]);
+    setNewTemplateItems([...newTemplateItems, {description: '', assignee: ''}]);
   };
 
   const updateTemplateItemRow = (index: number, field: 'description' | 'assignee', value: string) => {
-      const updated = [...newTemplateItems];
-      updated[index][field] = value;
-      setNewTemplateItems(updated);
+    const updated = [...newTemplateItems];
+    updated[index][field] = value;
+    setNewTemplateItems(updated);
   };
 
   const removeTemplateItemRow = (index: number) => {
-      setNewTemplateItems(newTemplateItems.filter((_, i) => i !== index));
+    setNewTemplateItems(newTemplateItems.filter((_, i) => i !== index));
   };
 
   const saveNewTemplate = () => {
@@ -312,6 +316,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     const matchedDept = departments.find(d => d === sop.category) || departments[0] || '';
     setNewTemplateDept(matchedDept);
 
+    // Split by new line, trim whitespace, and remove bullet points
     const lines = sop.content.split('\n')
         .map(line => line.trim())
         .filter(l => l.length > 0);
@@ -373,6 +378,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   // User Handlers
   const handleOpenAddUserModal = () => {
       setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPassword(''); // Clear password field for new user
       setNewUserRole('staff');
       setNewUserDept(departments[0] || 'Kitchen');
       setEditingUserId(null); // Ensure we are in add mode
@@ -381,6 +388,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleOpenEditUserModal = (user: User) => {
       setNewUserName(user.name);
+      setNewUserEmail(user.email);
+      setNewUserPassword(''); // Do not pre-fill password for security (even in mock)
       setNewUserRole(user.role);
       setNewUserDept(user.department || departments[0]);
       setEditingUserId(user.id); // Set ID to allow update logic
@@ -388,20 +397,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   }
 
   const saveUser = () => {
-      if (!newUserName.trim()) return;
+      if (!newUserName.trim() || !newUserEmail.trim()) {
+          alert("Name and Email are required.");
+          return;
+      }
+      if (!editingUserId && !newUserPassword.trim()) {
+          alert("Initial password is required for new users.");
+          return;
+      }
 
       if (editingUserId) {
           // Update existing user
-          // Find original to keep stats or other fields if necessary, though for now we just need ID and Status
           const existingUser = users.find(u => u.id === editingUserId);
           if (existingUser) {
               const updatedUser: User = {
                   ...existingUser,
                   name: newUserName,
+                  email: newUserEmail,
+                  // Only update password if a new one is provided
+                  ...(newUserPassword.trim() ? { password: newUserPassword } : {}), 
                   role: newUserRole,
                   department: newUserDept,
                   avatar: getInitials(newUserName),
-                  // status is preserved from existingUser spread
               };
               onUpdateUser(updatedUser);
           }
@@ -410,6 +427,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           const user: User = {
               id: `u-${Date.now()}`,
               name: newUserName,
+              email: newUserEmail,
+              password: newUserPassword, // Use provided initial password
               role: newUserRole,
               department: newUserDept,
               avatar: getInitials(newUserName),
@@ -426,32 +445,105 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         <div>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white flex items-center">
                 <span className="mr-3 bg-gray-800 dark:bg-gray-700 text-white p-2 rounded-lg hidden sm:block">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                    <AdminIcon className="h-6 w-6" />
                 </span>
                 Admin Control Panel
             </h2>
-            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">Manage settings, hotels, departments, and view team performance.</p>
+            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">Manage specifications, users, and analyze performance.</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex space-x-2 bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto scrollbar-hide">
-        {(['progress', 'users', 'hotels', 'departments', 'tasks', 'templates', 'sops', 'collections'] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-shrink-0 py-2 px-4 rounded-lg text-sm font-medium transition-all capitalize whitespace-nowrap ${
-              activeTab === tab
-                ? 'bg-gray-800 dark:bg-gray-700 text-white shadow-md'
-                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-            }`}
-          >
-            {tab === 'progress' ? 'Team Reports' : tab === 'tasks' ? 'Active Tasks' : tab === 'sops' ? 'Training/SOP' : tab === 'templates' ? 'Templates' : tab}
-          </button>
-        ))}
+      {/* GROUPED NAVIGATION */}
+      <div className="flex flex-col sm:flex-row gap-4 bg-white dark:bg-gray-800 p-2 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+          
+          {/* Operations Group */}
+          <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[10px] uppercase font-bold text-gray-400 px-2 tracking-wider">Monitoring & Ops</span>
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+                  <button
+                    onClick={() => setActiveTab('progress')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'progress' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      Team Reports
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('tasks')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'tasks' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      Active Tasks
+                  </button>
+              </div>
+          </div>
+
+          <div className="w-px bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
+
+          {/* Specifications Group */}
+          <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[10px] uppercase font-bold text-gray-400 px-2 tracking-wider">Specification Rules</span>
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+                  <button
+                    onClick={() => setActiveTab('templates')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'templates' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      Templates
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('sops')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'sops' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      SOPs
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('collections')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'collections' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      Collections
+                  </button>
+              </div>
+          </div>
+
+          <div className="w-px bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
+
+          {/* Settings Group */}
+          <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[10px] uppercase font-bold text-gray-400 px-2 tracking-wider">Organization</span>
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'users' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      Users
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('hotels')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'hotels' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      Hotels
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('departments')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeTab === 'departments' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                      Depts
+                  </button>
+              </div>
+          </div>
       </div>
 
       {/* CONTENT AREA */}
@@ -504,13 +596,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         <span className="mr-2 text-lg">+</span> Add Manager/User
                     </button>
                 </div>
-                <div className="overflow-x-auto">
+                
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full text-left text-sm text-gray-600 dark:text-gray-300">
                         <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 text-xs uppercase font-semibold text-gray-500 dark:text-gray-400">
                             <tr>
                                 <th className="px-4 py-3">Name</th>
                                 <th className="px-4 py-3">Role</th>
                                 <th className="px-4 py-3">Department</th>
+                                <th className="px-4 py-3">Email</th>
                                 <th className="px-4 py-3">Status</th>
                                 <th className="px-4 py-3 text-right">Actions</th>
                             </tr>
@@ -518,11 +613,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {users.map(user => (
                                 <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    <td className="px-4 py-3 flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 flex items-center justify-center text-xs font-bold">
+                                    <td 
+                                        className="px-4 py-3 flex items-center gap-2 cursor-pointer group" 
+                                        onClick={() => handleOpenEditUserModal(user)}
+                                        title="Click to edit user"
+                                    >
+                                        <span className="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 flex items-center justify-center text-xs font-bold group-hover:bg-blue-100 dark:group-hover:bg-blue-900/60 transition-colors">
                                             {user.avatar}
                                         </span>
-                                        <span className="font-medium text-gray-800 dark:text-white">{user.name}</span>
+                                        <span className="font-medium text-gray-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                            {user.name}
+                                        </span>
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`text-xs px-2 py-1 rounded-full uppercase font-bold border ${
@@ -534,6 +635,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                                         </span>
                                     </td>
                                     <td className="px-4 py-3">{user.department}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-500">{user.email}</td>
                                     <td className="px-4 py-3">
                                         <span className={`text-xs font-bold flex items-center gap-1 ${user.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
                                             <span className={`w-2 h-2 rounded-full ${user.status === 'active' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
@@ -573,6 +675,66 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         </tbody>
                     </table>
                 </div>
+
+                {/* Mobile Card View for Users */}
+                <div className="md:hidden space-y-3">
+                    {users.map(user => (
+                        <div key={user.id} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col gap-3">
+                            <div className="flex items-start justify-between">
+                                <div 
+                                    className="flex items-center gap-3 cursor-pointer"
+                                    onClick={() => handleOpenEditUserModal(user)}
+                                >
+                                    <span className="w-10 h-10 rounded-full bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 flex items-center justify-center text-sm font-bold">
+                                        {user.avatar}
+                                    </span>
+                                    <div>
+                                        <h4 className="font-bold text-gray-800 dark:text-white">{user.name}</h4>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                                    </div>
+                                </div>
+                                <span className={`text-[10px] px-2 py-1 rounded-full uppercase font-bold border ${
+                                    user.role === 'admin' 
+                                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600'
+                                }`}>
+                                    {user.role}
+                                </span>
+                            </div>
+                            
+                            <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <span className={`text-xs font-bold flex items-center gap-1 ${user.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                                    <span className={`w-2 h-2 rounded-full ${user.status === 'active' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                                    {user.status === 'active' ? 'Active' : 'On Hold'}
+                                </span>
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => onToggleUserStatus(user.id)}
+                                        className={`text-xs px-3 py-1.5 rounded font-medium border transition-colors ${
+                                            user.status === 'active' 
+                                            ? 'border-orange-200 dark:border-orange-800 text-orange-600 dark:text-orange-400'
+                                            : 'border-green-200 dark:border-green-800 text-green-600 dark:text-green-400'
+                                        }`}
+                                    >
+                                        {user.status === 'active' ? 'Hold' : 'Activate'}
+                                    </button>
+                                    <button 
+                                        onClick={() => handleOpenEditUserModal(user)}
+                                        className="text-gray-400 hover:text-blue-500 p-1"
+                                    >
+                                        <PencilIcon />
+                                    </button>
+                                    <button 
+                                        onClick={() => onDeleteUser(user.id)}
+                                        className="text-gray-400 hover:text-red-500 p-1"
+                                    >
+                                        <XIcon />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         )}
 
@@ -580,18 +742,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         {activeTab === 'hotels' && (
           <div className="max-w-2xl">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">Manage Hotel Properties</h3>
-            <div className="flex gap-2 mb-6">
+            <div className="flex flex-col sm:flex-row gap-2 mb-6">
                 <input 
                     type="text" 
                     value={newHotel} 
                     onChange={(e) => setNewHotel(e.target.value)}
                     placeholder="Enter new hotel name..." 
-                    className="flex-1 p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="flex-1 p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full"
                 />
                 <button 
                     onClick={handleAddHotel}
                     disabled={!newHotel.trim()}
-                    className="bg-gray-800 dark:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-900 dark:hover:bg-gray-600 disabled:bg-gray-400 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
+                    className="bg-gray-800 dark:bg-gray-700 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-gray-900 dark:hover:bg-gray-600 disabled:bg-gray-400 dark:disabled:bg-gray-800 disabled:cursor-not-allowed w-full sm:w-auto"
                 >
                     Add Hotel
                 </button>
@@ -619,18 +781,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         {activeTab === 'departments' && (
           <div className="max-w-2xl">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">Manage Departments</h3>
-            <div className="flex gap-2 mb-6">
+            <div className="flex flex-col sm:flex-row gap-2 mb-6">
                 <input 
                     type="text" 
                     value={newDept} 
                     onChange={(e) => setNewDept(e.target.value)}
                     placeholder="Enter new department..." 
-                    className="flex-1 p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="flex-1 p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full"
                 />
                 <button 
                     onClick={handleAddDept}
                     disabled={!newDept.trim()}
-                    className="bg-gray-800 dark:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-900 dark:hover:bg-gray-600 disabled:bg-gray-400 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
+                    className="bg-gray-800 dark:bg-gray-700 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-gray-900 dark:hover:bg-gray-600 disabled:bg-gray-400 dark:disabled:bg-gray-800 disabled:cursor-not-allowed w-full sm:w-auto"
                 >
                     Add Dept
                 </button>
@@ -836,7 +998,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         {activeTab === 'sops' && (
             <div>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-200 dark:border-gray-700 pb-2 mb-4 gap-3">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Training & SOPs</h3>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white">Training & SOPs</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Create reusable audit checklists.</p>
+                    </div>
                     <button 
                         onClick={handleOpenSopModal}
                         className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
@@ -1005,7 +1170,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                                         className="col-span-3 p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
                                     >
                                         <option value="">Unassigned</option>
-                                        {STAFF_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                                        {/* Use active users for assignment */}
+                                        {activeUsers.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                                     </select>
                                     <button onClick={() => removeItemRow(idx)} className="col-span-1 text-red-500 hover:text-red-700 flex justify-center">
                                         <XIcon />
@@ -1069,7 +1235,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                                         className="col-span-3 p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
                                     >
                                         <option value="">None</option>
-                                        {STAFF_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                                        {/* Use active users for assignment */}
+                                        {activeUsers.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                                     </select>
                                     <button onClick={() => removeTemplateItemRow(idx)} className="col-span-1 text-red-500 hover:text-red-700 flex justify-center">
                                         <XIcon />
@@ -1229,6 +1396,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
                         <input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" placeholder="e.g. John Doe"/>
                     </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                        <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" placeholder="e.g. john@hotel.com"/>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {editingUserId ? 'Reset Password (optional)' : 'Initial Password'}
+                        </label>
+                        <input 
+                            type="text" 
+                            value={newUserPassword} 
+                            onChange={(e) => setNewUserPassword(e.target.value)} 
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" 
+                            placeholder={editingUserId ? "Leave blank to keep existing" : "Set initial password"}
+                        />
+                    </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
                         <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value as UserRole)} className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg">
@@ -1243,8 +1426,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         </select>
                     </div>
                     <div className="flex justify-end pt-4">
-                        <button onClick={saveUser} disabled={!newUserName.trim()} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-700 disabled:cursor-not-allowed">
-                            {editingUserId ? 'Update User' : 'Add User'}
+                        <button onClick={saveUser} disabled={!newUserName.trim() || !newUserEmail.trim() || (!editingUserId && !newUserPassword.trim())} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-700 disabled:cursor-not-allowed">
+                            {editingUserId ? 'Update User' : 'Send Invite'}
                         </button>
                     </div>
                 </div>

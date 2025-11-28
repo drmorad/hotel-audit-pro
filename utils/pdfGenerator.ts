@@ -94,27 +94,30 @@ export const generateAuditPDF = (audit: Audit, currentUser: User) => {
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
-  doc.text("Results Summary", 14, currentY + 1);
+  doc.text("Executive Summary", 14, currentY + 1);
 
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   
-  // Draw summary badges
-  let badgeX = 50;
+  // Draw summary badges/text
+  let badgeX = 14;
+  const badgeY = currentY + 8;
   
-  const drawStat = (label: string, count: number, color: string) => {
-      doc.setTextColor(color);
-      doc.text(`${label}: ${count}`, badgeX, currentY + 1);
-      badgeX += 25;
-  };
+  // Pass Count
+  doc.setTextColor(passColor);
+  doc.text(`PASS: ${passedCount}`, badgeX, badgeY);
+  badgeX += 25;
 
-  drawStat("Pass", passedCount, passColor);
-  drawStat("Fail", failedCount, failColor);
+  // Fail Count
+  doc.setTextColor(failColor);
+  doc.text(`FAIL: ${failedCount}`, badgeX, badgeY);
+  badgeX += 25;
   
+  // Other Counts
   doc.setTextColor(100, 100, 100);
-  doc.text(`N/A: ${naCount}`, badgeX, currentY + 1);
+  doc.text(`N/A: ${naCount}`, badgeX, badgeY);
   badgeX += 20;
-  doc.text(`Pending: ${pendingCount}`, badgeX, currentY + 1);
+  doc.text(`Pending: ${pendingCount}`, badgeX, badgeY);
 
   // --- Score Box (Top Right) ---
   const scoreBoxY = 40;
@@ -144,8 +147,9 @@ export const generateAuditPDF = (audit: Audit, currentUser: User) => {
     
     const notes = item.notes ? `Note: ${item.notes}` : '';
     const temp = item.temperature ? `Temp: ${item.temperature}°F` : '';
-    const hasPhoto = item.photo ? '[Photo Attached]' : '';
+    const hasPhoto = item.photo ? '[Photo Evidence Attached]' : '';
     
+    // Combine details into a clean multiline string
     const details = [temp, notes, hasPhoto].filter(Boolean).join('\n');
 
     return [
@@ -157,7 +161,7 @@ export const generateAuditPDF = (audit: Audit, currentUser: User) => {
   });
 
   autoTable(doc, {
-    startY: currentY + 10,
+    startY: currentY + 15,
     head: [['Inspection Item', 'Assignee', 'Result', 'Details / Observations']],
     body: tableBody,
     theme: 'grid',
@@ -169,23 +173,24 @@ export const generateAuditPDF = (audit: Audit, currentUser: User) => {
     styles: {
       fontSize: 9,
       cellPadding: 3,
-      valign: 'middle',
+      valign: 'top', // Top align for better readability with multiline details
       overflow: 'linebreak',
     },
     columnStyles: {
       0: { cellWidth: 'auto' }, 
-      1: { cellWidth: 30, fontSize: 8, textColor: '#4b5563' },
-      2: { cellWidth: 20, halign: 'center', fontStyle: 'bold' },
-      3: { cellWidth: 50, fontSize: 8, textColor: '#4b5563' }
+      1: { cellWidth: 35, fontSize: 8, textColor: '#4b5563' }, // Assignee Column
+      2: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }, // Result Column
+      3: { cellWidth: 50, fontSize: 8, textColor: '#4b5563' }  // Details Column
     },
     didParseCell: function(data) {
+        // Color coding for results
         if (data.section === 'body' && data.column.index === 2) {
             if (data.cell.raw === 'Pass') {
                 data.cell.styles.textColor = passColor;
             } else if (data.cell.raw === 'Fail') {
                 data.cell.styles.textColor = failColor;
             } else {
-                data.cell.styles.textColor = '#9ca3af';
+                data.cell.styles.textColor = '#9ca3af'; // Gray for Pending/NA
             }
         }
     }
@@ -264,7 +269,7 @@ export const generateIncidentPDF = (incident: Incident, currentUser: User) => {
 
     // History Log Table
     doc.setFont('helvetica', 'bold');
-    doc.text("Activity History:", 14, y);
+    doc.text("Activity History (Audit Trail):", 14, y);
     y += 5;
 
     if (incident.history && incident.history.length > 0) {

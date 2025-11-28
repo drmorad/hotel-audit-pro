@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { Audit, User } from '../types';
 import { AuditStatus } from '../types';
@@ -7,11 +8,15 @@ import { generateAuditPDF } from '../utils/pdfGenerator';
 interface AuditListViewProps {
   audits: Audit[];
   onSelectAudit: (audit: Audit) => void;
-  currentUser: User;
+  currentUser: User | null; // Changed to User | null
 }
 
 const AuditListView: React.FC<AuditListViewProps> = ({ audits, onSelectAudit, currentUser }) => {
   const [filterStatus, setFilterStatus] = useState<'All' | AuditStatus>('All');
+
+  // Ensure currentUser is not null for operations that require it
+  if (!currentUser) return null; // Or render a loading/error state if expected
+
 
   // Filter logic similar to Dashboard but applied to this specific view
   const relevantAudits = audits.filter(audit => {

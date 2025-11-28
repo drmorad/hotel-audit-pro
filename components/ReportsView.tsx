@@ -7,7 +7,7 @@ import { generateAuditPDF, generateIncidentPDF } from '../utils/pdfGenerator';
 interface ReportsViewProps {
   audits: Audit[];
   incidents: Incident[];
-  currentUser: User;
+  currentUser: User | null; // Changed to User | null
 }
 
 type ReportType = 'audits' | 'incidents';
@@ -15,6 +15,9 @@ type ReportType = 'audits' | 'incidents';
 const ReportsView: React.FC<ReportsViewProps> = ({ audits, incidents, currentUser }) => {
   const [activeTab, setActiveTab] = useState<ReportType>('audits');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Ensure currentUser is not null for operations that require it
+  if (!currentUser) return null; // Or render a loading/error state if expected
 
   // 1. Filter Audits: Only Completed
   const completedAudits = audits.filter(a => {
@@ -38,7 +41,6 @@ const ReportsView: React.FC<ReportsViewProps> = ({ audits, incidents, currentUse
   const resolvedIncidents = incidents.filter(i => {
       // Allow viewing of all incidents in the archive, but prioritize Resolved/Verified
       // OR maybe we want to see ALL past reports? Usually Archive implies Closed.
-      // Let's show Resolved/Verified for "Archive" purposes.
       if (i.status !== IncidentStatus.Resolved && i.status !== IncidentStatus.Verified) return false;
       
       if (currentUser.role !== 'admin') {

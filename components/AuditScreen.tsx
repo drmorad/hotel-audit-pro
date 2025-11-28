@@ -1,28 +1,46 @@
+
 import React, { useState, useMemo } from 'react';
-import type { Audit, InspectionItem, User } from '../types';
+import type { Audit, InspectionItem, User, NewIncidentData } from '../types';
 import { InspectionResult } from '../types';
 import { CameraIcon, CheckIcon, XIcon, BanIcon, UserIcon } from './icons/ActionIcons';
-import { STAFF_MEMBERS } from '../constants';
 import { generateAuditPDF } from '../utils/pdfGenerator';
+// @ts-ignore: MOCK_USERS will be replaced by dynamic user fetching in a real scenario
+// Added import for MOCK_USERS to populate assignee dropdown.
+import { MOCK_USERS } from '../constants';
 
 interface AuditScreenProps {
   audit: Audit;
   onSave: (updatedAudit: Audit) => void;
   onBack: () => void;
-  currentUser: User;
+  currentUser: User | null; // Changed to User | null
+  onReportIncident: (data?: Partial<NewIncidentData>) => void;
 }
 
-const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, currentUser }) => {
+const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, currentUser, onReportIncident }) => {
   const [currentAudit, setCurrentAudit] = useState<Audit>({
       ...audit,
       items: audit.items.map(item => ({...item})) // Deep copy items
   });
+
+  // State for Auto-Incident creation logic
+  const [failedItemContext, setFailedItemContext] = useState<InspectionItem | null>(null);
+
+  // Ensure currentUser is not null for operations that require it
+  if (!currentUser) return null; // Or render a loading/error state if expected
 
   const handleItemChange = <K extends keyof InspectionItem>(
     itemId: string,
     field: K,
     value: InspectionItem[K]
   ) => {
+    // If setting result to Fail, trigger the context menu
+    if (field === 'result' && value === InspectionResult.Fail) {
+        const item = currentAudit.items.find(i => i.id === itemId);
+        if (item) {
+            setFailedItemContext(item);
+        }
+    }
+
     setCurrentAudit(prev => ({
       ...prev,
       items: prev.items.map(item =>
@@ -55,6 +73,18 @@ const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, curren
     generateAuditPDF(currentAudit, currentUser);
   };
 
+  const triggerIncidentCreation = () => {
+      if (failedItemContext) {
+          onReportIncident({
+              title: `Failed Audit Item: ${failedItemContext.description.substring(0, 30)}...`,
+              description: `Audit: ${currentAudit.title}\nItem: ${failedItemContext.description}\nNotes: ${failedItemContext.notes || 'No notes provided during audit.'}\nTemperature: ${failedItemContext.temperature ? failedItemContext.temperature + '°F' : 'N/A'}`,
+              department: audit.department,
+              photo: failedItemContext.photo
+          });
+          setFailedItemContext(null);
+      }
+  };
+
   // Calculate progress based on items that have a result (not undefined)
   const progress = (currentAudit.items.filter(i => i.result).length / currentAudit.items.length) * 100;
 
@@ -81,11 +111,46 @@ const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, curren
   };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 p-4 sm:p-8 rounded-2xl shadow-lg mb-20 md:mb-0 border border-gray-100 dark:border-gray-700 transition-colors">
+    <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 p-4 sm:p-8 rounded-2xl shadow-lg mb-20 md:mb-0 border border-gray-100 dark:border-gray-700 transition-colors relative">
+      
+      {/* Auto-Incident Modal Overlay */}
+      {failedItemContext && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setFailedItemContext(null)}></div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full relative border border-gray-200 dark:border-gray-700 animate-in fade-in zoom-in duration-200">
+                  <div className="flex items-start mb-4">
+                      <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full mr-3">
+                          <XIcon />
+                      </div>
+                      <div>
+                          <h3 className="font-bold text-gray-900 dark:text-white text-lg">Item Failed</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                              This item failed. Do you want to create an Incident ticket automatically for the <strong>{audit.department}</strong> department?
+                          </p>
+                      </div>
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                      <button 
+                        onClick={() => setFailedItemContext(null)}
+                        className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      >
+                          Skip
+                      </button>
+                      <button 
+                        onClick={triggerIncidentCreation}
+                        className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors"
+                      >
+                          Create Incident
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <div className="flex justify-between items-center mb-4">
         <button onClick={onBack} className="text-blue-600 dark:text-blue-400 hover:underline flex items-center">
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-            Back to Dashboard
+            Back to Audits
         </button>
         <button 
             onClick={handleExportPDF}
@@ -193,7 +258,7 @@ const AuditScreen: React.FC<AuditScreenProps> = ({ audit, onSave, onBack, curren
                             aria-label="Assign team member"
                         >
                             <option value="">Unassigned</option>
-                            {STAFF_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                            {MOCK_USERS.filter(u => u.status === 'active').map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                         </select>
                     </div>
                 </div>

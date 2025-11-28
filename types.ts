@@ -7,7 +7,7 @@ export type Department = string;
 export const DefaultDepartments = {
   Kitchen: 'Kitchen',
   Housekeeping: 'Housekeeping',
-  FrontOffice: 'Front Office',
+  FrontOffice: 'FrontOffice',
   Maintenance: 'Maintenance',
 };
 
@@ -17,6 +17,8 @@ export type UserStatus = 'active' | 'on-hold';
 export interface User {
   id: string;
   name: string;
+  email: string; // Added for Auth
+  password?: string; // Added for Auth (In a real app, this would never be on the client side in plain text/object)
   role: UserRole;
   avatar: string;
   department?: Department;
@@ -100,8 +102,8 @@ export interface Incident {
   priority: IncidentPriority;
   type: IncidentType;
   reportedAt: string;
-  photo?: string | null; // Base64 string of the image
-  history: IncidentActivity[]; // New field for audit trail
+  photo?: string | null; 
+  history: IncidentActivity[]; 
 }
 
 export type NewIncidentData = Omit<Incident, 'id' | 'status' | 'reportedAt' | 'history'>;
@@ -116,7 +118,7 @@ export interface SOP {
   title: string;
   category: string;
   content: string;
-  document?: string; // Base64 string or URL
+  document?: string; 
   documentName?: string;
 }
 
