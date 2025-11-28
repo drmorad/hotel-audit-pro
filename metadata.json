@@ -1,0 +1,7 @@
+{
+  "name": "Hotel Audit Pro",
+  "description": "A streamlined application for hotel quality and hygiene directors to conduct audits, manage incidents, and maintain standards, inspired by simplified 'ClickUp' functionality for hotel operations.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
